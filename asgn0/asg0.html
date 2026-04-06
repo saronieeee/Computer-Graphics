@@ -16,12 +16,11 @@
 
   <!-- inputs for the two original vectors -->
   <p>
-    v1: x <input id="v1x" type="number" step="any" value="2.25">
-    y <input id="v1y" type="number" step="any" value="2.25">
+    v1: x <input id="v1x" type="number" step="any" value="0">
+    y <input id="v1y" type="number" step="any" value="0">
     &nbsp;&nbsp;
-    v2: x <input id="v2x" type="number" step="any" value="-1.5">
-    y <input id="v2y" type="number" step="any" value="1.5">
-    <input type="button" value="Draw" onclick="handleDrawEvent()">
+    v2: x <input id="v2x" type="number" step="any" value="0">
+    y <input id="v2y" type="number" step="any" value="0">
   </p>
 
   <!-- controls for vector operations -->
@@ -37,8 +36,11 @@
       <option value="angle">Angle between</option>
       <option value="area">Area</option>
     </select>
-    Scalar: <input id="scalar" type="number" step="any" value="2">
-    <input type="button" value="Draw Operation" onclick="handleDrawOperationEvent()">
+    Scalar: <input id="scalar" type="number" step="any" value="0">
+  </p>
+
+  <p>
+    <input type="button" value="Draw" onclick="handleDrawOperationEvent()">
   </p>
 
   <!-- helper libraries + assignment code -->
