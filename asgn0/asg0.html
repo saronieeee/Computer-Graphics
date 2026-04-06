@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!-- saved from url=(0062)https://rodger.global-linguist.com/webgl/ch02/HelloCanvas.html -->
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+  <title>Clear "canvas"</title>
+</head>
+
+<body onload="main()">
+  <!-- canvas where the vectors are drawn -->
+  <canvas id="webgl" width="400" height="400">
+    Please use a browser that supports "canvas"
+  </canvas>
+
+  <!-- inputs for the two original vectors -->
+  <p>
+    v1: x <input id="v1x" type="number" step="any" value="2.25">
+    y <input id="v1y" type="number" step="any" value="2.25">
+    &nbsp;&nbsp;
+    v2: x <input id="v2x" type="number" step="any" value="-1.5">
+    y <input id="v2y" type="number" step="any" value="1.5">
+    <input type="button" value="Draw" onclick="handleDrawEvent()">
+  </p>
+
+  <!-- controls for vector operations -->
+  <p>
+    Operation:
+    <select id="operation">
+      <option value="add">Add</option>
+      <option value="sub">Sub</option>
+      <option value="mul">Mul</option>
+      <option value="div">Div</option>
+      <option value="magnitude">Magnitude</option>
+      <option value="normalize">Normalize</option>
+      <option value="angle">Angle between</option>
+      <option value="area">Area</option>
+    </select>
+    Scalar: <input id="scalar" type="number" step="any" value="2">
+    <input type="button" value="Draw Operation" onclick="handleDrawOperationEvent()">
+  </p>
+
+  <!-- helper libraries + assignment code -->
+  <script src="./HelloCanvas_files/webgl-utils.js.download"></script>
+  <script src="./HelloCanvas_files/webgl-debug.js.download"></script>
+  <script src="./HelloCanvas_files/cuon-utils.js.download"></script>
+  <script src="./lib/cuon-matrix-cse160.js"></script>
+  <script src="./asg0.js"></script>
+
+
+
+</body>
+
+</html>
