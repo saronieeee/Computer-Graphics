@@ -30,7 +30,7 @@ const TRIANGLE = 1;
 const CIRCLE = 2;
 const CHARACTER = 3;
 
-const LINK_PIXEL_SIZE = 11;
+const LINK_PIXEL_SIZE = 6;
 const LINK_ART = [
   '....GGGGGG......',
   '...GGGGGGGG.....',
@@ -139,9 +139,7 @@ function addActionsForHtmlUI() {
     renderAllShapes();
   };
 
-  document.getElementById('linkButton').onclick = function() {
-    drawLinkArt();
-  };
+  // linkButton click is handled by Game.js
 
   document.getElementById('redSlide').addEventListener('mouseup', function() {
     g_selectedColor[0] = this.value / 100;
@@ -290,5 +288,34 @@ function click(ev) {
   shape.size = g_selectedSize;
   g_shapesList.push(shape);
 
+  renderAllShapes();
+}
+
+/**
+ * Draws the LINK_ART sprite centered at the given clip-space position.
+ * Used by Game.js to render the character at an arbitrary location.
+ * @param {number} x - X coordinate of center in clip space.
+ * @param {number} y - Y coordinate of center in clip space.
+ */
+function drawLinkArtAt(x, y) {
+  g_shapesList = [];
+  const rows = LINK_ART.length;
+  const cols = LINK_ART.reduce((maxCols, rowData) => Math.max(maxCols, rowData.length), 0);
+  const pixelWidth = LINK_PIXEL_SIZE / canvas.width * 2;
+  const pixelHeight = LINK_PIXEL_SIZE / canvas.height * 2;
+  const originX = x - (cols * pixelWidth) / 2 + pixelWidth / 2;
+  const originY = y + (rows * pixelHeight) / 2 - pixelHeight / 2;
+  for (let row = 0; row < rows; row++) {
+    const rowData = LINK_ART[row];
+    for (let col = 0; col < rowData.length; col++) {
+      const pixelCode = rowData[col];
+      if (pixelCode === '.' || !LINK_PALETTE[pixelCode]) continue;
+      const point = new Point();
+      point.position = [originX + col * pixelWidth, originY - row * pixelHeight];
+      point.color = LINK_PALETTE[pixelCode].slice();
+      point.size = LINK_PIXEL_SIZE;
+      g_shapesList.push(point);
+    }
+  }
   renderAllShapes();
 }
