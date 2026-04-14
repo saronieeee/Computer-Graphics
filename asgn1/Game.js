@@ -107,6 +107,43 @@ function drawMovingCharacter() {
   if (typeof drawLinkArtAt === 'function') {
     drawLinkArtAt(charX, charY);
   }
+  drawTextSK(charX + 0.08, charY - 0.23);
+}
+
+// --- "SK" pixel art letters ---
+const SK_ART = [
+  '.WW..W..W.',
+  'W....W.W..',
+  '.W...WW...',
+  '..W..W.W..',
+  'WW...W..W.'
+];
+const SK_COLOR = [0,0,0, 1.0]; // White
+const SK_PIXEL = 1;
+
+/**
+ * Draws pixel-art "SK" text at the given clip-space position.
+ * @param {number} cx - X center in clip space.
+ * @param {number} cy - Y center in clip space.
+ */
+function drawTextSK(cx, cy) {
+  const cols = SK_ART[0].length;
+  const rows = SK_ART.length;
+  const pw = SK_PIXEL / canvas.width * 2;
+  const ph = SK_PIXEL / canvas.height * 2;
+  const startX = cx - (cols * pw) / 2;
+  const startY = cy + (rows * ph) / 2;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (SK_ART[r][c] === 'W') {
+        gl.uniform4f(u_FragColor, SK_COLOR[0], SK_COLOR[1], SK_COLOR[2], SK_COLOR[3]);
+        gl.uniform1f(u_Size, SK_PIXEL);
+        gl.disableVertexAttribArray(a_Position);
+        gl.vertexAttrib3f(a_Position, startX + c * pw, startY - r * ph, 0.0);
+        gl.drawArrays(gl.POINTS, 0, 1);
+      }
+    }
+  }
 }
 
 // --- Monster pixel art and palette ---
@@ -171,6 +208,7 @@ function animateGame() {
   if (typeof drawLinkArtAt === 'function') {
     drawLinkArtAt(charX, charY);
   }
+  drawTextSK(charX + 0.08, charY - 0.23);
   // Draw monster only if game is active
   if (gameActive) {
     updateMonster();
