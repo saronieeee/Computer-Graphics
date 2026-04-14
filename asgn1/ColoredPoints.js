@@ -28,6 +28,34 @@ let u_Size;
 const POINT = 0;
 const TRIANGLE = 1;
 const CIRCLE = 2;
+const CHARACTER = 3;
+
+const LINK_PIXEL_SIZE = 11;
+const LINK_ART = [
+  '....GGGGGG......',
+  '...GGGGGGGG.....',
+  '.O.GBBBBBBG.O..',
+  '.OOBBBBBBBB.O...',
+  '.OOBOGOOGOBOO...',
+  '.OOBOBOOBOBOO...',
+  '.BOOOOOOOOOOB..',
+  '.BBGOOBBOOGGB...',
+  '.OGGGOOOOGGBBB...',
+  '.OGGGGGGGGGGBB..',
+  '.OGGGGGGGGGOBB..',
+  '..BGGBBBGGOOOB...',
+  '..GBBBGBBBBOOO...',
+  '..GGGBBBGGGGO...',
+  '...BGGGGGGGG....',
+  '...BBB...BBB.....',
+  '...BBB...BBB.....',
+];
+
+const LINK_PALETTE = {
+  G: [0.60, 0.85, 0.10, 1.0],  // Lime Green (hair)
+  O: [0.95, 0.65, 0.25, 1.0],  // Orange (face/skin/arms/legs)
+  B: [0.78, 0.29, 0.03, 1.0],  // Dark orange-brown (hair band/detail)
+};
 
 /**
  * Gets the canvas element and initializes the WebGL context.
@@ -111,6 +139,10 @@ function addActionsForHtmlUI() {
     renderAllShapes();
   };
 
+  document.getElementById('linkButton').onclick = function() {
+    drawLinkArt();
+  };
+
   document.getElementById('redSlide').addEventListener('mouseup', function() {
     g_selectedColor[0] = this.value / 100;
   });
@@ -163,6 +195,40 @@ let g_shapesList = [];
 let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
 let g_selectedSize = 10.0;
 let g_selectedType = POINT;
+
+/**
+ * Builds and renders a pixel-art Link using square point sprites.
+ */
+function drawLinkArt() {
+  g_shapesList = [];
+
+  const rows = LINK_ART.length;
+  const cols = LINK_ART.reduce(function(maxCols, rowData) {
+    return Math.max(maxCols, rowData.length);
+  }, 0);
+  const pixelWidth = LINK_PIXEL_SIZE / canvas.width * 2;
+  const pixelHeight = LINK_PIXEL_SIZE / canvas.height * 2;
+  const originX = -(cols * pixelWidth) / 2 + pixelWidth / 2;
+  const originY = (rows * pixelHeight) / 2 - pixelHeight / 2;
+
+  for (let row = 0; row < rows; row++) {
+    const rowData = LINK_ART[row];
+    for (let col = 0; col < rowData.length; col++) {
+      const pixelCode = rowData[col];
+      if (pixelCode === '.') {
+        continue;
+      }
+
+      const point = new Point();
+      point.position = [originX + col * pixelWidth, originY - row * pixelHeight];
+      point.color = LINK_PALETTE[pixelCode].slice();
+      point.size = LINK_PIXEL_SIZE;
+      g_shapesList.push(point);
+    }
+  }
+
+  renderAllShapes();
+}
 
 /**
  * Clears the canvas and renders every shape currently stored in `g_shapesList`.
