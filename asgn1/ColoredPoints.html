@@ -15,10 +15,16 @@
     <button id="clearButton">Clear</button>
     <button id="linkButton">Draw Link</button>
     <button id="playGameButton">Play Game</button>
+    <button id="infoButton" title="Click for info about this feature" onclick="document.getElementById('infoText').style.display = document.getElementById('infoText').style.display === 'none' ? 'block' : 'none';">&#x1f6c8; Cool Factor!</button>
+    <p id="infoText" style="display:none; background:#222; color:#fff; padding:10px; border-radius:6px; max-width:400px; font-size:14px;">
+      This is cool because I learned how to move a character via keyboard and gameified the project! The goal is to dodge a ball that bounces across the canvas, gaining velocity as time goes on.
+    </p>
+
     <p id="gameMessage" style="font-size:20px; color:red; font-weight:bold; display:none;">Dodge the ball! Use WASD keys to move.</p>
     <p id="gameOverMessage" style="font-size:24px; color:red; font-weight:bold; display:none;">Game Over!</p>
     <p id="timerDisplay" style="font-size:18px; font-weight:bold; display:none;">Time: 0.0s</p>
     <p id="highScoreDisplay" style="font-size:18px; font-weight:bold; color:gold;"></p>
+    
     <br><br>
     <button id="pointButton">Point</button>
     <button id="triButton">Triangle</button>
