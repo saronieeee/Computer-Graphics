@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Blocky Animal</title>
+  </head>
+
+  <body onload="main()">
+    <canvas id="webgl" width="400" height="400">
+      Please use a browser that supports "canvas"
+    </canvas>
+    <p id="fps" style="margin:4px 0; font-size:13px; color:#aaa;"></p>
+    <br>
+    <p>
+      <button id="playAllButton">Play All</button>
+      <button id="stopAllButton">Stop All</button>
+    </p>
+    <p>
+      Camera Angle <input type="range" min="-180" max="180" value="0" class="slider" id="angleSlide">
+    </p>
+    <p>
+      Leg Swing <input type="range" min="-45" max="45" value="0" class="slider" id="yellowAngleSlide">
+      <button id="yellowOnButton">On</button>
+      <button id="yellowOffButton">Off</button>
+    </p>
+    <p>
+      Head Bend <input type="range" min="-45" max="45" value="0" class="slider" id="magentaAngleSlide">
+      <button id="magentaOnButton">On</button>
+      <button id="magentaOffButton">Off</button>
+    </p>
+    <p>
+      Feather Spread <input type="range" min="0" max="25" value="15" class="slider" id="featherAngleSlide">
+      <button id="featherOnButton">On</button>
+      <button id="featherOffButton">Off</button>
+    </p>
+    <p>
+      Beak Open <input type="range" min="0" max="10" value="3" class="slider" id="beakAngleSlide">
+      <button id="beakOnButton">On</button>
+      <button id="beakOffButton">Off</button>
+    </p>
+
+    <script src="lib/webgl-utils.js"></script>
+    <script src="lib/webgl-debug.js"></script>
+    <script src="lib/cuon-utils.js"></script>
+    <script src="lib/cuon-matrix-cse160.js"></script>
+    <script src="Cube.js"></script>
+    <script src="Cylinder.js"></script>
+    <script src="BlockyAnimal.js"></script>
+  </body>
+</html>
