@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Blocky World — CSE160 ASG3</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100vh;
+      overflow: hidden;
+      background: #1a1a1a;
+      color: #ddd;
+      font-family: monospace;
+      display: flex;
+      align-items: flex-start;
+    }
+
+    canvas {
+      display: block;
+      height: 100vh;
+      width: 100vh;   /* keep square */
+      flex-shrink: 0;
+      cursor: crosshair;
+    }
+
+    #panel {
+      flex: 1;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+      max-height: 100vh;
+    }
+
+    #fps { font-size: 13px; color: #aaa; }
+
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    label { font-size: 12px; color: #bbb; white-space: nowrap; }
+
+    input[type=range] { width: 110px; accent-color: #4a9eff; }
+
+    button {
+      background: #2d2d2d;
+      color: #ccc;
+      border: 1px solid #555;
+      padding: 3px 9px;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 3px;
+    }
+    button:hover { background: #3a3a3a; }
+
+    #controls {
+      font-size: 12px;
+      color: #888;
+      line-height: 2;
+      border-top: 1px solid #333;
+      padding-top: 10px;
+    }
+    #controls b { color: #aaa; display: block; margin-bottom: 4px; }
+
+    .key {
+      display: inline-block;
+      background: #2d2d2d;
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 0 5px;
+      font-size: 11px;
+      color: #ccc;
+    }
+  </style>
+</head>
+<body onload="main()">
+
+  <canvas id="webgl" width="600" height="600">
+    Please use a browser that supports &ldquo;canvas&rdquo;
+  </canvas>
+
+  <div id="panel">
+
+    <div id="fps">FPS: --</div>
+
+    <div class="row">
+      <label>FOV</label>
+      <input id="fovSlide" type="range" min="30" max="120" value="60">
+      <span id="fovValue">60</span>&deg;
+    </div>
+
+    <div class="row">
+      <label>Render</label>
+      <button id="texColor">Color</button>
+      <button id="texUVdbg">UV Debug</button>
+      <button id="texTex">Texture</button>
+    </div>
+
+    <div id="controls">
+      <b>Controls</b>
+      <span class="key">W</span> / <span class="key">S</span> &nbsp;forward / back<br>
+      <span class="key">A</span> / <span class="key">D</span> &nbsp;strafe left / right<br>
+      <span class="key">Q</span> / <span class="key">E</span> &nbsp;pan left / right<br>
+      <span class="key">Space</span> &nbsp;jump<br>
+      <span class="key">Mouse drag</span> &nbsp;look (yaw + pitch)<br>
+      <span class="key">Left click</span> &nbsp;place block<br>
+      <span class="key">Right click</span> &nbsp;remove block (≤ 4 away)<br>
+    </div>
+
+  </div>
+
+  <script src="lib/webgl-utils.js"></script>
+  <script src="lib/webgl-debug.js"></script>
+  <script src="lib/cuon-utils.js"></script>
+  <script src="lib/cuon-matrix-cse160.js"></script>
+  <script src="Cube.js"></script>
+  <script src="Cylinder.js"></script>
+  <script src="Camera.js"></script>
+  <script src="BlockyWorld.js"></script>
+</body>
+</html>
