@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '{print $2, $3, $4}')",
+      "Bash(awk 'BEGIN{minx=9999;miny=9999;minz=9999;maxx=-9999;maxy=-9999;maxz=-9999} {if\\($1<minx\\)minx=$1; if\\($1>maxx\\)maxx=$1; if\\($2<miny\\)miny=$2; if\\($2>maxy\\)maxy=$2; if\\($3<minz\\)minz=$3; if\\($3>maxz\\)maxz=$3} END{print \"x:\"minx,maxx; print \"y:\"miny,maxy; print \"z:\"minz,maxz}')"
+    ]
+  }
+}
