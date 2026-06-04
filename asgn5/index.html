@@ -1,0 +1,601 @@
+<html>
+<head>
+    <style>
+        html, body { margin: 0; height: 100%; overflow: hidden; }
+        #c { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+        .split {
+            position: absolute; left: 0; top: 0;
+            width: 100%; height: 100%;
+            display: flex; pointer-events: none;
+        }
+        .split > div { width: 100%; height: 100%; }
+        #overlay {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.55);
+            color: white; font-family: sans-serif;
+            cursor: pointer; user-select: none; z-index: 10;
+        }
+        #overlay h1 { margin: 0 0 16px; font-size: 2.4rem; letter-spacing: 2px; }
+        #overlay p  { margin: 4px 0; font-size: 1rem; opacity: 0.75; }
+        #crosshair {
+            position: absolute; top: 50%; left: 25%;
+            transform: translate(-50%, -50%);
+            width: 20px; height: 20px;
+            pointer-events: none; display: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute;
+            background: rgba(255,255,255,0.8);
+        }
+        #crosshair::before { left:50%; top:0; width:2px; height:100%; transform:translateX(-50%); }
+        #crosshair::after  { top:50%; left:0; height:2px; width:100%; transform:translateY(-50%); }
+    </style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <div class="split">
+        <div id="view1"></div>
+        <div id="view2"></div>
+    </div>
+    <div id="overlay">
+        <h1>Town Explorer</h1>
+        <p>Click to start</p>
+        <p style="margin-top:16px">
+            <b>W A S D</b> — move &nbsp;|&nbsp;
+            <b>Mouse</b> — look &nbsp;|&nbsp;
+            <b>Esc</b> — pause
+        </p>
+    </div>
+    <div id="crosshair"></div>
+</body>
+
+<script type="module">
+import * as THREE from 'three';
+import {GUI}                    from 'three/addons/libs/lil-gui.module.min.js';
+import {RectAreaLightUniformsLib} from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import {RectAreaLightHelper}    from 'three/addons/helpers/RectAreaLightHelper.js';
+
+// ── Helper classes ─────────────────────────────────────────────────────────────
+
+class ColorGUIHelper {
+    constructor(obj, prop) { this.obj = obj; this.prop = prop; }
+    get value() { return '#' + this.obj[this.prop].getHexString(); }
+    set value(v) { this.obj[this.prop].set(v); }
+}
+class DegRadHelper {
+    constructor(obj, prop) { this.obj = obj; this.prop = prop; }
+    get value() { return THREE.MathUtils.radToDeg(this.obj[this.prop]); }
+    set value(v) { this.obj[this.prop] = THREE.MathUtils.degToRad(v); }
+}
+class MinMaxGUIHelper {
+    constructor(obj, mn, mx, md) { this.obj=obj; this.mn=mn; this.mx=mx; this.md=md; }
+    get min() { return this.obj[this.mn]; }
+    set min(v) { this.obj[this.mn]=v; this.obj[this.mx]=Math.max(this.obj[this.mx],v+this.md); }
+    get max() { return this.obj[this.mx]; }
+    set max(v) { this.obj[this.mx]=v; this.min=this.min; }
+}
+function makeXYZGUI(folder, vec3, name, cb = ()=>{}, listenUpdates = false) {
+    const f = folder.addFolder(name);
+    const cx = f.add(vec3,'x',-200,200).onChange(cb);
+    const cy = f.add(vec3,'y',   0,300).onChange(cb);
+    const cz = f.add(vec3,'z',-200,200).onChange(cb);
+    if (listenUpdates) { cx.listen(); cy.listen(); cz.listen(); }
+    f.open();
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────────
+
+RectAreaLightUniformsLib.init();
+
+const canvas    = document.querySelector('#c');
+const overlay   = document.querySelector('#overlay');
+const crosshair = document.querySelector('#crosshair');
+const view1Elem = document.querySelector('#view1');
+const view2Elem = document.querySelector('#view2');
+
+const renderer = new THREE.WebGLRenderer({antialias: true, canvas});
+renderer.setPixelRatio(window.devicePixelRatio);
+
+// ── Scene ──────────────────────────────────────────────────────────────────────
+
+const scene     = new THREE.Scene();
+const SKY_COL   = new THREE.Color(0x90c0e0);
+const SKY_FOG   = new THREE.FogExp2(0x90c0e0, 0.006);
+scene.background = SKY_COL;
+scene.fog        = SKY_FOG;
+
+// ── Cameras ────────────────────────────────────────────────────────────────────
+
+const camera = new THREE.PerspectiveCamera(75, 2, 0.1, 500);
+camera.position.set(0, 3, 0);
+camera.rotation.order = 'YXZ';
+
+const camera2 = new THREE.PerspectiveCamera(60, 2, 1, 2000);
+camera2.position.set(0, 220, 380);
+camera2.lookAt(0, 0, 10);
+
+const camHelper = new THREE.CameraHelper(camera);
+scene.add(camHelper);
+
+// ── First-person controls (registered before any scene code can error) ─────────
+
+let active = false, yaw = 0, pitch = 0;
+
+overlay.addEventListener('click', () => {
+    active = true;
+    overlay.style.display   = 'none';
+    crosshair.style.display = 'block';
+});
+
+document.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && active) {
+        active = false;
+        overlay.style.display   = 'flex';
+        crosshair.style.display = 'none';
+    }
+});
+
+document.addEventListener('mousemove', e => {
+    if (!active) return;
+    yaw   -= e.movementX * 0.006;
+    pitch -= e.movementY * 0.006;
+    pitch  = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, pitch));
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch;
+});
+
+const keys = new Set();
+document.addEventListener('keydown', e => keys.add(e.code));
+document.addEventListener('keyup',   e => keys.delete(e.code));
+
+// ── Switchable lights ──────────────────────────────────────────────────────────
+
+let curLight = null, curHelper = null, lightFolder = null;
+let sunAngle   = Math.atan2(80, 60);
+let sunTracking = true;
+const SUN_R    = 400;
+
+function clearLight() {
+    if (curHelper) {
+        curHelper.parent === curLight ? curLight.remove(curHelper) : scene.remove(curHelper);
+        curHelper = null;
+    }
+    if (curLight) {
+        if (curLight.target) scene.remove(curLight.target);
+        scene.remove(curLight);
+        curLight = null;
+    }
+    if (lightFolder) { lightFolder.destroy(); lightFolder = null; }
+}
+
+function setLight(type) {
+    clearLight();
+    lightFolder = gui.addFolder('Light');
+
+    if (type === 'AmbientLight') {
+        const l = new THREE.AmbientLight(0xffffff, 1);
+        scene.add(l); curLight = l;
+        lightFolder.addColor(new ColorGUIHelper(l,'color'),'value').name('color');
+        lightFolder.add(l,'intensity',0,5,0.01);
+
+    } else if (type === 'HemisphereLight') {
+        const l = new THREE.HemisphereLight(0xB1E1FF, 0xB97A20, 1);
+        scene.add(l); curLight = l;
+        const h = new THREE.HemisphereLightHelper(l, 10);
+        scene.add(h); curHelper = h;
+        lightFolder.addColor(new ColorGUIHelper(l,'color'),'value').name('skyColor');
+        lightFolder.addColor(new ColorGUIHelper(l,'groundColor'),'value').name('groundColor');
+        lightFolder.add(l,'intensity',0,5,0.01);
+
+    } else if (type === 'DirectionalLight') {
+        sunTracking = true;  // re-enable sun tracking for fresh DirectionalLight
+        const l = new THREE.DirectionalLight(0xffffff, 1);
+        l.position.set(80,150,60); l.target.position.set(0,0,10);
+        scene.add(l); scene.add(l.target); curLight = l;
+        const h = new THREE.DirectionalLightHelper(l);
+        scene.add(h); curHelper = h;
+        const upd = () => { l.target.updateMatrixWorld(); h.update(); }; upd();
+        lightFolder.addColor(new ColorGUIHelper(l,'color'),'value').name('color');
+        lightFolder.add(l,'intensity',0,5,0.01);
+        // Position sliders listen() so they update as the sun moves.
+        // Dragging a slider calls updPos which disables tracking.
+        const updPos = () => { sunTracking = false; upd(); };
+        makeXYZGUI(lightFolder, l.position, 'position', updPos, true);
+        makeXYZGUI(lightFolder, l.target.position, 'target', upd);
+
+    } else if (type === 'PointLight') {
+        const l = new THREE.PointLight(0xffffff, 500);
+        l.position.set(0,50,10); scene.add(l); curLight = l;
+        const h = new THREE.PointLightHelper(l);
+        scene.add(h); curHelper = h;
+        const upd = () => h.update();
+        lightFolder.addColor(new ColorGUIHelper(l,'color'),'value').name('color');
+        lightFolder.add(l,'intensity',0,1000,1);
+        lightFolder.add(l,'distance',0,500).onChange(upd);
+        makeXYZGUI(lightFolder, l.position, 'position', upd);
+
+    } else if (type === 'SpotLight') {
+        const l = new THREE.SpotLight(0xffffff, 500);
+        l.position.set(0,80,10); scene.add(l); scene.add(l.target); curLight = l;
+        const h = new THREE.SpotLightHelper(l);
+        scene.add(h); curHelper = h;
+        const upd = () => { l.target.updateMatrixWorld(); h.update(); };
+        lightFolder.addColor(new ColorGUIHelper(l,'color'),'value').name('color');
+        lightFolder.add(l,'intensity',0,1000,1);
+        lightFolder.add(new DegRadHelper(l,'angle'),'value',0,90).name('angle').onChange(upd);
+        lightFolder.add(l,'penumbra',0,1,0.01);
+        makeXYZGUI(lightFolder, l.position, 'position', upd);
+        makeXYZGUI(lightFolder, l.target.position, 'target', upd);
+
+    } else if (type === 'RectAreaLight') {
+        const l = new THREE.RectAreaLight(0xffffff, 5, 40, 20);
+        l.position.set(0,80,10); l.rotation.x = THREE.MathUtils.degToRad(-90);
+        scene.add(l); curLight = l;
+        const h = new RectAreaLightHelper(l); l.add(h); curHelper = h;
+        lightFolder.addColor(new ColorGUIHelper(l,'color'),'value').name('color');
+        lightFolder.add(l,'intensity',0,20,0.01);
+        lightFolder.add(l,'width',0,100); lightFolder.add(l,'height',0,100);
+        lightFolder.add(new DegRadHelper(l.rotation,'x'),'value',-180,180).name('x rotation');
+        makeXYZGUI(lightFolder, l.position, 'position');
+    }
+    lightFolder.open();
+}
+
+// ── GUI (must exist before setLight is called) ─────────────────────────────────
+
+const gui = new GUI();
+const camFolder = gui.addFolder('Camera');
+camFolder.add(camera,'fov',1,120).onChange(() => camera.updateProjectionMatrix());
+const mmh = new MinMaxGUIHelper(camera,'near','far',0.1);
+camFolder.add(mmh,'min',0.1,50,0.1).name('near').onChange(() => camera.updateProjectionMatrix());
+camFolder.add(mmh,'max',10,1000,1).name('far').onChange(() => camera.updateProjectionMatrix());
+camFolder.open();
+
+const lightParams = {type:'DirectionalLight'};
+gui.add(lightParams,'type',['AmbientLight','HemisphereLight','DirectionalLight',
+    'PointLight','SpotLight','RectAreaLight']).name('Light Type').onChange(setLight);
+
+setLight('DirectionalLight');
+
+// ── Ground ─────────────────────────────────────────────────────────────────────
+
+const groundMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(800,800),
+    new THREE.MeshStandardMaterial({color:0x2a2a2a, roughness:0.95})
+);
+groundMesh.rotation.x = -Math.PI/2;
+scene.add(groundMesh);
+
+const paveMat = new THREE.MeshStandardMaterial({color:0x888880, roughness:0.9});
+for (const px of [-21, 21]) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(10,150), paveMat);
+    p.rotation.x = -Math.PI/2; p.position.set(px, 0.005, -14); scene.add(p);
+}
+const kerbMat = new THREE.MeshStandardMaterial({color:0xcccccc, roughness:0.8});
+for (const kx of [-16,16]) {
+    const k = new THREE.Mesh(new THREE.PlaneGeometry(0.4,150), kerbMat);
+    k.rotation.x = -Math.PI/2; k.position.set(kx, 0.01, -14); scene.add(k);
+}
+const dashMat = new THREE.MeshStandardMaterial({color:0xffcc00, roughness:0.8});
+const dashGeo = new THREE.PlaneGeometry(0.5, 6);
+for (let dz = -76; dz <= 52; dz += 12) {
+    const d = new THREE.Mesh(dashGeo, dashMat);
+    d.rotation.x = -Math.PI/2; d.position.set(0, 0.01, dz); scene.add(d);
+}
+
+// ── Sun ────────────────────────────────────────────────────────────────────────
+
+// Sun starts at the same direction as the original directional light (80,150,60)
+
+const sunMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(10,24,24),
+    new THREE.MeshBasicMaterial({color:0xfffde8, fog:false})
+);
+scene.add(sunMesh);
+
+const corona = new THREE.Mesh(
+    new THREE.SphereGeometry(16,24,24),
+    new THREE.MeshBasicMaterial({color:0xffee88, fog:false, transparent:true, opacity:0.18})
+);
+scene.add(corona);
+
+function getSunPos(angle) {
+    return new THREE.Vector3(
+        SUN_R * Math.sin(angle),
+        150 + 120 * Math.sin(angle * 0.5 + 0.4),  // gentle arc, stays above horizon
+        SUN_R * Math.cos(angle)
+    );
+}
+// Set initial sun position
+sunMesh.position.copy(getSunPos(sunAngle));
+corona.position.copy(sunMesh.position);
+
+// ── Clouds ─────────────────────────────────────────────────────────────────────
+
+const cloudMat = new THREE.MeshBasicMaterial({color:0xfafafa});
+function makeCloud(cx, cy, cz, s) {
+    const g = new THREE.Group();
+    [{x:0,y:0,z:0,r:7},{x:8,y:-1,z:1,r:6},{x:-7,y:-1.5,z:-1,r:5.5},
+     {x:4,y:3,z:-2,r:5},{x:-3,y:2.5,z:2,r:4.5},{x:12,y:-2,z:0,r:3.5},{x:-11,y:-2,z:1,r:3}
+    ].forEach(({x,y,z,r}) => {
+        const p = new THREE.Mesh(new THREE.SphereGeometry(r*s,8,8), cloudMat);
+        p.position.set(x*s, y*s, z*s); g.add(p);
+    });
+    g.position.set(cx, cy, cz); scene.add(g);
+}
+[[-120,90,-180,1.1],[80,85,-220,0.8],[220,95,-90,1.3],[-230,80,60,0.9],
+ [0,100,210,1.5],[160,88,160,0.7],[-180,92,220,1.2],[310,78,10,1.0],
+ [-310,84,110,0.85],[110,96,-260,0.9],[-60,87,-310,1.1],[260,93,-180,0.75],
+ [-100,82,300,1.4],[200,90,280,0.95],[50,78,-130,1.0]
+].forEach(([cx,cy,cz,s]) => makeCloud(cx,cy,cz,s));
+
+// ── Buildings ──────────────────────────────────────────────────────────────────
+
+const texLoader = new THREE.TextureLoader();
+
+const wallTex = texLoader.load('82-obj/obj/textures/AussenWand_C.jpg');
+wallTex.colorSpace = THREE.SRGBColorSpace;
+wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+
+const steelTex = texLoader.load('82-obj/obj/textures/Steel_C.jpg');
+steelTex.colorSpace = THREE.SRGBColorSpace;
+steelTex.wrapS = steelTex.wrapT = THREE.RepeatWrapping;
+steelTex.repeat.set(4,1);
+
+const roofMat    = new THREE.MeshStandardMaterial({map:steelTex, roughness:0.5, metalness:0.4, color:0x999999});
+const winGlassMat= new THREE.MeshStandardMaterial({color:0x5588aa, transparent:true, opacity:0.82, roughness:0.04, metalness:0.15, emissive:0x112233, emissiveIntensity:0.5});
+const winFrameMat= new THREE.MeshStandardMaterial({color:0x1a1a1a, roughness:0.6, metalness:0.5});
+const floorBandMat=new THREE.MeshStandardMaterial({color:0x555555, roughness:0.6, metalness:0.3});
+const baseMat    = new THREE.MeshStandardMaterial({color:0x222222, roughness:0.8, metalness:0.2, map:steelTex});
+const doorMat    = new THREE.MeshStandardMaterial({color:0x0a0a12, roughness:0.5, metalness:0.6});
+
+const winGeo  = new THREE.PlaneGeometry(1.25, 1.75);
+const frameGeo= new THREE.PlaneGeometry(1.5, 2.0);
+
+const CSTEP=3.2, RSTEP=3.5, WY0=4.5;
+
+const buildings = [
+    {x:-28,z:-70,w:20,d:18,h:35,tint:0xe8ddd0},
+    {x: 28,z:-70,w:22,d:20,h:18,tint:0xd0dde8},
+    {x:-28,z:-42,w:16,d:16,h:50,tint:0xd8e8d8},
+    {x: 28,z:-42,w:20,d:18,h:25,tint:0xe8d8e8},
+    {x:-28,z:-14,w:22,d:20,h:12,tint:0xdde8e0},
+    {x: 28,z:-14,w:18,d:16,h:44,tint:0xe8e0d0},
+    {x:-28,z: 14,w:20,d:18,h:22,tint:0xd8e0e8},
+    {x: 28,z: 14,w:18,d:16,h:28,tint:0xe8d8d0},
+    {x:-28,z: 42,w:22,d:18,h:40,tint:0xd0e8e8},
+    {x: 28,z: 42,w:18,d:20,h:10,tint:0xe0e8d8},
+];
+
+buildings.forEach(({x,z,w,d,h,tint}) => {
+    // Wall body
+    const wt = wallTex.clone();
+    wt.wrapS = wt.wrapT = THREE.RepeatWrapping; wt.needsUpdate = true;
+    const mat = new THREE.MeshStandardMaterial({map:wt, color:tint, roughness:0.85, metalness:0.05});
+    const geo = new THREE.BoxGeometry(w,h,d);
+    const uv  = geo.attributes.uv;
+    [[d/5,h/5],[d/5,h/5],[w/5,d/5],[w/5,d/5],[w/5,h/5],[w/5,h/5]].forEach(([su,sv],f) => {
+        for (let v=0;v<4;v++) { const i=f*4+v; uv.setXY(i,uv.getX(i)*su,uv.getY(i)*sv); }
+    });
+    uv.needsUpdate = true;
+    const body = new THREE.Mesh(geo, mat);
+    body.position.set(x, h/2, z); scene.add(body);
+
+    // Dark base
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w+0.02,3.2,d+0.02), baseMat);
+    base.position.set(x, 1.6, z); scene.add(base);
+
+    // Floor bands
+    for (let fy=RSTEP; fy<h-0.3; fy+=RSTEP) {
+        const band = new THREE.Mesh(new THREE.BoxGeometry(w+0.12,0.18,d+0.12), floorBandMat);
+        band.position.set(x, fy, z); scene.add(band);
+    }
+
+    // Roof
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(w+1.2,0.7,d+1.2), roofMat);
+    roof.position.set(x, h+0.35, z); scene.add(roof);
+
+    // Rooftop box
+    const rtH = Math.max(1.5, h*0.08);
+    const rt = new THREE.Mesh(new THREE.BoxGeometry(w*0.35,rtH,d*0.35),
+        new THREE.MeshStandardMaterial({color:0x444444, roughness:0.7, metalness:0.3, map:steelTex}));
+    rt.position.set(x+w*0.15, h+0.7+rtH/2, z-d*0.15); scene.add(rt);
+
+    // Entrance (street-facing side)
+    const fSign  = x < 0 ? 1 : -1;
+    const faceX  = x + fSign*(w/2);
+    const overhang = new THREE.Mesh(new THREE.BoxGeometry(2.5,0.35,Math.min(w*0.45,6)), roofMat);
+    overhang.position.set(faceX+fSign*1.25, 3.4, z); scene.add(overhang);
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(2.0,2.8), doorMat);
+    door.rotation.y = fSign > 0 ? Math.PI/2 : -Math.PI/2;
+    door.position.set(faceX+fSign*0.04, 1.4, z); scene.add(door);
+
+    // Windows on all 4 faces
+    [
+        {ox:0,      oz:d/2+0.04, fw:w, ry:0,          ca:'x'},
+        {ox:0,      oz:-(d/2+0.04),fw:w,ry:Math.PI,   ca:'x'},
+        {ox:w/2+0.04, oz:0,      fw:d, ry:Math.PI/2,  ca:'z'},
+        {ox:-(w/2+0.04),oz:0,    fw:d, ry:-Math.PI/2, ca:'z'},
+    ].forEach(({ox,oz,fw,ry,ca}) => {
+        const nC = Math.max(1, Math.floor((fw-1.5)/CSTEP));
+        const nR = Math.max(1, Math.floor((h-WY0-1)/RSTEP));
+        for (let r=0; r<nR; r++) for (let c=0; c<nC; c++) {
+            const off=(c-(nC-1)/2)*CSTEP, py=WY0+r*RSTEP+RSTEP/2;
+            const wx=x+ox+(ca==='x'?off:0), wz=z+oz+(ca==='z'?off:0);
+            const fr=new THREE.Mesh(frameGeo,winFrameMat); fr.rotation.y=ry; fr.position.set(wx,py,wz); scene.add(fr);
+            const gl=new THREE.Mesh(winGeo,winGlassMat); gl.rotation.y=ry;
+            gl.position.set(wx+(ca==='z'?(ox>0?0.01:-0.01):0), py, wz+(ca==='x'?(oz>0?0.01:-0.01):0));
+            scene.add(gl);
+        }
+    });
+});
+
+// ── Billboards ─────────────────────────────────────────────────────────────────
+
+function makeBillboard(bx, bz, ry, label, bgHex, fgHex) {
+    const grp = new THREE.Group();
+    const SW=7, SH=3.5, SB=6, SCY=SB+SH/2;
+    const poleMat = new THREE.MeshStandardMaterial({color:0x555555, metalness:0.7, roughness:0.3});
+    for (const ox of [-2.2, 2.2]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,SB+SH,8), poleMat);
+        pole.position.set(ox,(SB+SH)/2,0); grp.add(pole);
+    }
+    const cv=document.createElement('canvas'); cv.width=512; cv.height=256;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle=bgHex; ctx.fillRect(0,0,512,256);
+    ctx.strokeStyle=fgHex; ctx.lineWidth=10; ctx.strokeRect(8,8,496,240);
+    ctx.fillStyle=fgHex; ctx.font='bold 78px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    label.split('\n').forEach((ln,i,arr) => ctx.fillText(ln,256,256/(arr.length+1)*(i+1)));
+    const tex=new THREE.CanvasTexture(cv); tex.colorSpace=THREE.SRGBColorSpace;
+    const back=new THREE.Mesh(new THREE.BoxGeometry(SW+0.3,SH+0.3,0.18),
+        new THREE.MeshStandardMaterial({color:0x1a1a1a,roughness:0.9}));
+    back.position.set(0,SCY,0); grp.add(back);
+    const front=new THREE.Mesh(new THREE.PlaneGeometry(SW,SH),
+        new THREE.MeshBasicMaterial({map:tex}));
+    front.position.set(0,SCY,0.1); grp.add(front);
+    grp.position.set(bx,0,bz); grp.rotation.y=ry; scene.add(grp);
+}
+
+[
+    {x:-22,z:-56,ry: Math.PI/2, label:'CITY\nCENTER',  bg:'#c0392b',fg:'#ffffff'},
+    {x: 22,z:-28,ry:-Math.PI/2, label:'OPEN\n24/7',    bg:'#2471a3',fg:'#ffffff'},
+    {x:-22,z:  0,ry: Math.PI/2, label:'BEST\nPRICES',  bg:'#1e8449',fg:'#ffffff'},
+    {x: 22,z: 28,ry:-Math.PI/2, label:'FRESH\nFOOD',   bg:'#d4ac0d',fg:'#000000'},
+    {x:  0,z:-82,ry: 0,         label:'WELCOME\nDOWNTOWN',bg:'#6c3483',fg:'#ffffff'},
+].forEach(({x,z,ry,label,bg,fg}) => makeBillboard(x,z,ry,label,bg,fg));
+
+// ── Cars ───────────────────────────────────────────────────────────────────────
+
+function makeCar(cx, cz, ry, color) {
+    const grp = new THREE.Group();
+    const bodyMat =new THREE.MeshStandardMaterial({color,roughness:0.25,metalness:0.65});
+    const tireMat =new THREE.MeshStandardMaterial({color:0x111111,roughness:0.95,metalness:0.0});
+    const rimMat  =new THREE.MeshStandardMaterial({color:0xbbbbbb,roughness:0.15,metalness:0.9});
+    const glassMat=new THREE.MeshStandardMaterial({color:0x223344,transparent:true,opacity:0.72,roughness:0.05,metalness:0.1});
+
+    const lowerBody=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.72,4.0),bodyMat);
+    lowerBody.position.y=0.76; grp.add(lowerBody);
+    const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.65,0.65,2.0),bodyMat);
+    cabin.position.set(0,1.5,-0.1); grp.add(cabin);
+
+    // Windshields
+    [[0.88,-10,0],[-1.08,10,Math.PI]].forEach(([pz,tilt,ry2]) => {
+        const s=new THREE.Mesh(new THREE.PlaneGeometry(1.48,0.58),glassMat);
+        s.rotation.set(THREE.MathUtils.degToRad(tilt),ry2,0);
+        s.position.set(0,1.5,pz); grp.add(s);
+    });
+    // Side windows
+    [-0.835,0.835].forEach((sx,si) => {
+        const w=new THREE.Mesh(new THREE.PlaneGeometry(1.55,0.5),glassMat);
+        w.rotation.y=si===0?-Math.PI/2:Math.PI/2; w.position.set(sx,1.5,-0.1); grp.add(w);
+    });
+    // Wheels
+    [[-1.05,0.38,1.2],[1.05,0.38,1.2],[-1.05,0.38,-1.2],[1.05,0.38,-1.2]].forEach(([wx,wy,wz]) => {
+        const tire=new THREE.Mesh(new THREE.CylinderGeometry(0.37,0.37,0.26,14),tireMat);
+        tire.rotation.z=Math.PI/2; tire.position.set(wx,wy,wz); grp.add(tire);
+        const rim=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.27,8),rimMat);
+        rim.rotation.z=Math.PI/2; rim.position.set(wx,wy,wz); grp.add(rim);
+    });
+    // Lights
+    const hlMat=new THREE.MeshBasicMaterial({color:0xffffcc,fog:false});
+    const tlMat=new THREE.MeshBasicMaterial({color:0xff1100,fog:false});
+    [-0.55,0.55].forEach(lx => {
+        const hl=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.18,0.05),hlMat);
+        hl.position.set(lx,0.84,2.03); grp.add(hl);
+        const tl=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.18,0.05),tlMat);
+        tl.position.set(lx,0.84,-2.03); grp.add(tl);
+    });
+    grp.position.set(cx,0,cz); grp.rotation.y=ry; scene.add(grp);
+}
+
+const carColors=[0xc0392b,0x2471a3,0x1e8449,0x784212,0x717d7e,
+                 0x2e4057,0x922b21,0x1a5276,0xd4ac0d,0x4a235a];
+[
+    {x:-14,z:-55,ry:0,        ci:0},{x:-14,z:-27,ry:0,        ci:2},
+    {x:-14,z:  2,ry:0,        ci:4},{x:-14,z: 30,ry:0,        ci:6},
+    {x: 14,z:-51,ry:Math.PI,  ci:1},{x: 14,z:-23,ry:Math.PI,  ci:3},
+    {x: 14,z:  6,ry:Math.PI,  ci:5},{x: 14,z: 34,ry:Math.PI,  ci:7},
+    {x:-14,z:-42,ry:0,        ci:8},{x: 14,z: 14,ry:Math.PI,  ci:9},
+].forEach(({x,z,ry,ci}) => makeCar(x,z,ry,carColors[ci]));
+
+// ── Scissor helper ─────────────────────────────────────────────────────────────
+
+function setScissor(elem) {
+    const cr=canvas.getBoundingClientRect(), er=elem.getBoundingClientRect();
+    const el=Math.max(0,er.left-cr.left);
+    const er2=Math.min(er.right,cr.right)-cr.left;
+    const et=Math.max(0,er.top-cr.top);
+    const eb=Math.min(er.bottom,cr.bottom)-cr.top;
+    const w=Math.min(cr.width,  er2-el);
+    const h=Math.min(cr.height, eb-et);
+    renderer.setScissor(el, cr.height-eb, w, h);
+    renderer.setViewport(el, cr.height-eb, w, h);
+    return w/h;
+}
+
+// ── Render loop ────────────────────────────────────────────────────────────────
+
+const fwdV  = new THREE.Vector3();
+const rgtV  = new THREE.Vector3();
+const UP    = new THREE.Vector3(0,1,0);
+const EYE_H = 3, SPEED = 12;
+let prevTime = performance.now();
+
+function render() {
+    requestAnimationFrame(render);
+
+    const cw=canvas.clientWidth, ch=canvas.clientHeight;
+    if (canvas.width!==cw||canvas.height!==ch) renderer.setSize(cw,ch,false);
+
+    const now=performance.now();
+    const dt=Math.min((now-prevTime)/1000,0.1);
+    prevTime=now;
+
+    // Advance sun orbit
+    sunAngle += dt * 0.04;   // full orbit ≈ 157 s (~2.6 min)
+    const sp = getSunPos(sunAngle);
+    sunMesh.position.copy(sp);
+    corona.position.copy(sp);
+
+    // Keep directional light locked to sun until user moves a slider
+    if (sunTracking && curLight && curLight.isDirectionalLight) {
+        curLight.position.copy(sp);
+        curLight.target.updateMatrixWorld();
+        if (curHelper) curHelper.update();
+    }
+
+    if (active) {
+        camera.getWorldDirection(fwdV); fwdV.y=0; fwdV.normalize();
+        rgtV.crossVectors(fwdV,UP);
+        const dist=SPEED*dt;
+        if(keys.has('KeyW')) camera.position.addScaledVector(fwdV,  dist);
+        if(keys.has('KeyS')) camera.position.addScaledVector(fwdV, -dist);
+        if(keys.has('KeyA')) camera.position.addScaledVector(rgtV, -dist);
+        if(keys.has('KeyD')) camera.position.addScaledVector(rgtV,  dist);
+        camera.position.y=EYE_H;
+    }
+
+    renderer.setScissorTest(true);
+
+    {   // Left — first-person
+        const asp=setScissor(view1Elem);
+        camera.aspect=asp; camera.updateProjectionMatrix();
+        camHelper.visible=false;
+        scene.background=SKY_COL; scene.fog=SKY_FOG;
+        renderer.render(scene,camera);
+    }
+    {   // Right — overview with camera frustum
+        const asp=setScissor(view2Elem);
+        camera2.aspect=asp; camera2.updateProjectionMatrix();
+        camHelper.visible=true; camHelper.update();
+        scene.background=new THREE.Color(0x000040); scene.fog=null;
+        renderer.render(scene,camera2);
+    }
+}
+
+render();
+</script>
+</html>
