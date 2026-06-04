@@ -1270,9 +1270,9 @@ function renderAllShapes() {
   gl.uniform1i(u_lightOn, g_lightOn);
   gl.uniform1i(u_spotOn,  g_spotOn);
   gl.uniform1f(u_spotCutoff, g_spotCutoff);
-  // Spotlight always aimed from the light position toward the platform centre
-  const _sdx = 16 - g_lightPos[0],
-        _sdy = 0.5 - g_lightPos[1],
+  // Spotlight always aimed from the light position toward the master sword
+  const _sdx = 22 - g_lightPos[0],
+        _sdy = 2.04 - g_lightPos[1],
         _sdz = 16 - g_lightPos[2];
   const _sdl = Math.sqrt(_sdx*_sdx + _sdy*_sdy + _sdz*_sdz) || 1;
   gl.uniform3f(u_spotDir, _sdx/_sdl, _sdy/_sdl, _sdz/_sdl);
